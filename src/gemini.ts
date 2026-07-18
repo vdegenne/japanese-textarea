@@ -9,6 +9,19 @@ export const geminiModels = [
 ] as const
 export type GeminiModel = (typeof geminiModels)[number]
 
+type GeminiSchema = {
+	[k: string]: any
+}
+
+type GeminiOptionsBase = {
+	apiKey: string
+	model: GeminiModel
+	systemInstruction?: string | string[]
+	previousInteractionId?: string
+	thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+	debug?: boolean
+}
+
 export class RateLimitError extends Error {
 	constructor(message = 'Gemini rate limit exceeded') {
 		super(message)
@@ -28,19 +41,6 @@ function isRateLimitError(error: unknown): boolean {
 		error.message.toLowerCase().includes('quota') ||
 		error.message.toLowerCase().includes('resource exhausted')
 	)
-}
-
-type GeminiSchema = {
-	[k: string]: any
-}
-
-type GeminiOptionsBase = {
-	apiKey: string
-	model: GeminiModel
-	systemInstruction?: string | string[]
-	previousInteractionId?: string
-	thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
-	debug?: boolean
 }
 
 export async function askGemini<T extends object>(
@@ -69,21 +69,31 @@ export async function askGemini(
 		schema?: GeminiSchema
 	},
 ) {
-	const ai = new GoogleGenAI({apiKey: options.apiKey})
+	const {
+		apiKey,
+		model,
+		thinkingLevel: thinking_level = 'medium',
+		systemInstruction,
+		previousInteractionId: previous_interaction_id,
+		schema,
+		debug,
+	} = options
 
-	const system_instruction = Array.isArray(options.systemInstruction)
-		? options.systemInstruction
+	const ai = new GoogleGenAI({apiKey})
+
+	const system_instruction = Array.isArray(systemInstruction)
+		? systemInstruction
 				.map((instruction) => instruction.trim())
 				.filter(Boolean)
 				.join('\n')
-		: options.systemInstruction?.trim()
+		: systemInstruction?.trim()
 
 	const generation_config = {
 		max_output_tokens: 65536,
-		thinking_level: options.thinkingLevel ?? 'medium',
+		thinking_level,
 	}
 
-	if (options.debug) {
+	if (debug) {
 		console.log(`
 =======================
 Gemini request
@@ -92,36 +102,36 @@ input:
 ${suggestion}
 
 model:
-${options.model}
+${model}
 
 thinking level:
-${generation_config.thinking_level}
+${thinking_level}
 
 previous interaction id:
-${options.previousInteractionId ?? 'none'}
+${previous_interaction_id ?? 'none'}
 
 system instruction:
 ${system_instruction ?? 'none'}
 
 schema:
-${options.schema ? JSON.stringify(options.schema, null, 2) : 'none'}
+${schema ? JSON.stringify(schema, null, 2) : 'none'}
 =======================
 `)
 	}
 
 	try {
 		const response = await ai.interactions.create({
-			previous_interaction_id: options.previousInteractionId,
-			model: options.model ?? 'gemini-3.5-flash',
+			previous_interaction_id,
+			model,
 			generation_config,
 			input: suggestion,
 			system_instruction,
-			...(options.schema
+			...(schema
 				? {
 						response_format: {
 							type: 'text',
 							mime_type: 'application/json',
-							schema: options.schema,
+							schema,
 						},
 					}
 				: {}),
@@ -129,8 +139,8 @@ ${options.schema ? JSON.stringify(options.schema, null, 2) : 'none'}
 
 		return {
 			output: response.output_text
-				? options.schema
-					? (JSON.parse(response.output_text) as object)
+				? schema
+					? JSON.parse(response.output_text)
 					: response.output_text
 				: undefined,
 			previousInteractionId: response.id,
