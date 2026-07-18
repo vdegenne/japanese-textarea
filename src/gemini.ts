@@ -44,7 +44,7 @@ function isRateLimitError(error: unknown): boolean {
 }
 
 export async function askGemini<T extends object>(
-	suggestion: string,
+	input: string,
 	options: GeminiOptionsBase & {
 		schema: GeminiSchema
 	},
@@ -54,7 +54,7 @@ export async function askGemini<T extends object>(
 }>
 
 export async function askGemini(
-	suggestion: string,
+	input: string,
 	options: GeminiOptionsBase & {
 		schema?: undefined
 	},
@@ -64,7 +64,7 @@ export async function askGemini(
 }>
 
 export async function askGemini(
-	suggestion: string,
+	input: string,
 	options: GeminiOptionsBase & {
 		schema?: GeminiSchema
 	},
@@ -99,7 +99,7 @@ export async function askGemini(
 Gemini request
 =======================
 input:
-${suggestion}
+${input}
 
 model:
 ${model}
@@ -124,7 +124,7 @@ ${schema ? JSON.stringify(schema, null, 2) : 'none'}
 			previous_interaction_id,
 			model,
 			generation_config,
-			input: suggestion,
+			input,
 			system_instruction,
 			...(schema
 				? {
