@@ -1,5 +1,6 @@
 import {cquerySelector} from 'html-vision'
 import {openSettingsDialog} from './imports.js'
+import {stateless} from './stateless.js'
 
 const inputNames = ['INPUT', 'TEXTAREA', 'MD-FILLED-TEXT-FIELD']
 export function eventIsFromInput(event: Event) {
@@ -65,5 +66,28 @@ window.addEventListener('voice-recorder-submit', async (event: Event) => {
 	if (input && mode === 0) {
 		// const {store} = await import('./store.js')
 		// store.search = input
+	}
+})
+
+function getDeepActiveElement(): Element | null {
+	let active: Element | null = document.activeElement
+
+	while (active?.shadowRoot?.activeElement) {
+		active = active.shadowRoot.activeElement
+	}
+
+	return active
+}
+
+document.addEventListener('selectionchange', function () {
+	const active = getDeepActiveElement()
+
+	// @ts-ignore
+	if (!active?.getRootNode().host.matches('#main-textarea')) return
+
+	const selection = document.getSelection()?.toString().trim()
+
+	if (selection) {
+		stateless.lastSelection = selection
 	}
 })

@@ -86,7 +86,7 @@ export class SettingsDialog extends LitElement {
 						</md-filled-text-field>
 
 						${store.F.SELECT('Model', 'geminiModel', geminiModels, {menuPositioning: 'popover', disabled: !store.geminiApiKey})}
-						${store.F.TEXTAREA('Instructions', 'systemInstruction', {supportingText: 'You can change the language used for the responses here, and/or add other instructions.', rows: 4, disabled: !store.geminiApiKey})}
+						${store.F.TEXTAREA('Instructions', 'systemInstruction', {supportingText: 'You can change the language used for the responses here, and/or add other instructions (newline-separated)', rows: 4, disabled: !store.geminiApiKey})}
 					</card-element>
 
 					<card-element headline="theme">

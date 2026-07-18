@@ -9,199 +9,139 @@ export const geminiModels = [
 ] as const
 export type GeminiModel = (typeof geminiModels)[number]
 
-// export async function askGemini(
-// 	sentence: string,
-// 	options: {apiKey: string; model: GeminiModel; systemInstruction?: string},
-// ): Promise<jpbreaker.Response | undefined> {
-// 	const ai = new GoogleGenAI({apiKey: options.apiKey})
-//
-// 	const response = await ai.models.generateContent({
-// 		model: options.model ?? 'gemini-3.5-flash',
-// 		// model: 'gemini-3.5-flash',
-// 		contents: `Analyze every words in this japanese sentence: ${sentence}`,
-// 		config: {
-// 			systemInstruction: options.systemInstruction ?? [
-// 				...(options.systemInstruction
-// 					? [{text: options.systemInstruction}]
-// 					: []),
-// 				{text: 'You have to include all words'},
-// 			],
-// 			// systemInstruction: [{text: `Answer with only one sentence or two.`}],
-// 			// thinkingConfig: {
-// 			// 	thinkingLevel: ThinkingLevel.MINIMAL,
-// 			// },
-// 			thinkingConfig: {
-// 				thinkingLevel: ThinkingLevel.MINIMAL,
-// 			},
-// 			responseMimeType: 'application/json',
-// 			responseSchema: {
-// 				type: Type.OBJECT,
-// 				properties: {
-// 					sentence: {type: Type.STRING},
-// 					overallMeaning: {type: Type.STRING},
-// 					romanization: {type: Type.STRING},
-// 					literalGloss: {type: Type.STRING},
-// 					shortInterpretation: {type: Type.STRING},
-// 					parts: {
-// 						type: Type.ARRAY,
-// 						items: {
-// 							type: Type.OBJECT,
-// 							properties: {
-// 								word: {type: Type.STRING},
-// 								furigana: {type: Type.STRING},
-// 								romaji: {type: Type.STRING},
-// 								partOfSpeech: {type: Type.STRING},
-// 								partOfSpeechJa: {type: Type.STRING},
-// 								category: {type: Type.STRING},
-// 								baseForm: {type: Type.STRING},
-// 								translation: {type: Type.STRING},
-// 								explanation: {type: Type.STRING},
-// 								sentenceIndexes: {
-// 									type: Type.OBJECT,
-// 									properties: {
-// 										start: {type: Type.NUMBER},
-// 										end: {type: Type.NUMBER},
-// 									},
-// 									required: ['start', 'end'],
-// 								},
-// 							},
-// 							required: [
-// 								'word',
-// 								'furigana',
-// 								'romaji',
-// 								'partOfSpeech',
-// 								'partOfSpeechJa',
-// 								'category',
-// 								'baseForm',
-// 								'translation',
-// 								'explanation',
-// 								'sentenceIndexes',
-// 							],
-// 						},
-// 					},
-// 				},
-// 				required: [
-// 					'sentence',
-// 					'overallMeaning',
-// 					'romanization',
-// 					'literalGloss',
-// 					'parts',
-// 					'shortInterpretation',
-// 				],
-// 			},
-// 		},
-// 	})
-//
-// 	sleep(5000).then(() => {
-// 		console.log(response)
-// 	})
-//
-// 	return response.text ? JSON.parse(response.text) : undefined
-// }
-
-// export async function geminiTranslate(
-// 	content: string,
-// 	options: {apiKey: string; model: GeminiModel; systemInstruction?: string},
-// ): Promise<string | undefined> {
-// 	const ai = new GoogleGenAI({apiKey: options.apiKey})
-//
-// 	const response = await ai.models.generateContent({
-// 		model: options.model ?? 'gemini-3.5-flash',
-// 		// model: 'gemini-flash-lite-latest',
-// 		config: {
-// 			thinkingConfig: {
-// 				thinkingLevel: ThinkingLevel.MINIMAL,
-// 			},
-// 			systemInstruction: [
-// 				...(options.systemInstruction
-// 					? [{text: options.systemInstruction}]
-// 					: []),
-// 				{text: 'Just give the translation, no other words.'},
-// 			],
-// 		},
-// 		contents: [
-// 			{
-// 				role: 'user',
-// 				parts: [
-// 					{
-// 						text: `Traduis en francais directement: "${content}"`,
-// 					},
-// 				],
-// 			},
-// 		],
-// 	})
-//
-// 	return response.text
-// }
-
-export async function askGeminiSentenceEndings(
-	input: string,
-	options: {apiKey: string; model: GeminiModel; systemInstruction?: string},
-) {
-	const ai = new GoogleGenAI({apiKey: options.apiKey})
-
-	const response = await ai.interactions.create({
-		model: options.model ?? 'gemini-3.5-flash',
-		input,
-		generation_config: {
-			max_output_tokens: 65536,
-			thinking_level: 'medium',
-		},
-		system_instruction: `Analyze the sentence and list common sentence-final Japanese ASCII emotes. if it's Japanese also include the small version of the last letter (punctuations excluded).${options.systemInstruction ? ` ${options.systemInstruction}` : '.'}`,
-		response_format: {
-			type: 'text',
-			mime_type: 'application/json',
-			schema: {
-				type: Type.OBJECT,
-				properties: {
-					sentenceEndings: {
-						type: Type.ARRAY,
-						items: {
-							type: Type.STRING,
-						},
-					},
-				},
-				required: ['sentenceEndings'],
-			},
-		},
-	})
-
-	return {
-		output: response.output_text
-			? (JSON.parse(response.output_text) as jptxtarea.Response)
-			: undefined,
-		lastInteractionId: response.id,
+export class RateLimitError extends Error {
+	constructor(message = 'Gemini rate limit exceeded') {
+		super(message)
+		this.name = 'RateLimitError'
 	}
 }
 
-export async function askAnything(
-	input: string,
-	options: {
-		apiKey: string
-		model: GeminiModel
-		previousInteractionId?: string
-		systemIntruction?: string
+function isRateLimitError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false
+	}
+
+	return (
+		(error as any).status === 429 ||
+		(error as any).code === 429 ||
+		error.message.toLowerCase().includes('rate limit') ||
+		error.message.toLowerCase().includes('quota') ||
+		error.message.toLowerCase().includes('resource exhausted')
+	)
+}
+
+type GeminiSchema = {
+	[k: string]: any
+}
+
+type GeminiOptionsBase = {
+	apiKey: string
+	model: GeminiModel
+	systemInstruction?: string | string[]
+	previousInteractionId?: string
+	thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+	debug?: boolean
+}
+
+export async function askGemini<T extends object>(
+	suggestion: string,
+	options: GeminiOptionsBase & {
+		schema: GeminiSchema
+	},
+): Promise<{
+	output: T | undefined
+	previousInteractionId: string
+}>
+
+export async function askGemini(
+	suggestion: string,
+	options: GeminiOptionsBase & {
+		schema?: undefined
+	},
+): Promise<{
+	output: string | undefined
+	previousInteractionId: string
+}>
+
+export async function askGemini(
+	suggestion: string,
+	options: GeminiOptionsBase & {
+		schema?: GeminiSchema
 	},
 ) {
 	const ai = new GoogleGenAI({apiKey: options.apiKey})
 
-	const response = await ai.interactions.create({
-		previous_interaction_id: options.previousInteractionId,
-		model: options.model ?? 'gemini-3.5-flash',
-		input,
-		generation_config: {
-			max_output_tokens: 65536,
-			thinking_level: 'minimal',
-		},
-		system_instruction: options.systemIntruction,
-		response_format: {
-			type: 'text',
-			mime_type: 'text/plain',
-		},
-	})
+	const system_instruction = Array.isArray(options.systemInstruction)
+		? options.systemInstruction
+				.map((instruction) => instruction.trim())
+				.filter(Boolean)
+				.join('\n')
+		: options.systemInstruction?.trim()
 
-	return {
-		output: response.output_text,
-		lastInteractionId: response.id,
+	const generation_config = {
+		max_output_tokens: 65536,
+		thinking_level: options.thinkingLevel ?? 'medium',
+	}
+
+	if (options.debug) {
+		console.log(`
+=======================
+Gemini request
+=======================
+input:
+${suggestion}
+
+model:
+${options.model}
+
+thinking level:
+${generation_config.thinking_level}
+
+previous interaction id:
+${options.previousInteractionId ?? 'none'}
+
+system instruction:
+${system_instruction ?? 'none'}
+
+schema:
+${options.schema ? JSON.stringify(options.schema, null, 2) : 'none'}
+=======================
+`)
+	}
+
+	try {
+		const response = await ai.interactions.create({
+			previous_interaction_id: options.previousInteractionId,
+			model: options.model ?? 'gemini-3.5-flash',
+			generation_config,
+			input: suggestion,
+			system_instruction,
+			...(options.schema
+				? {
+						response_format: {
+							type: 'text',
+							mime_type: 'application/json',
+							schema: options.schema,
+						},
+					}
+				: {}),
+		})
+
+		return {
+			output: response.output_text
+				? options.schema
+					? (JSON.parse(response.output_text) as object)
+					: response.output_text
+				: undefined,
+			previousInteractionId: response.id,
+		}
+	} catch (error) {
+		if (isRateLimitError(error)) {
+			throw new RateLimitError()
+		}
+
+		throw error
 	}
 }
+
+export {Type}

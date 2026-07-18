@@ -4,6 +4,8 @@ class StatelessController extends Snar {
 	@state() loading = false
 	@state() audioPlaying = false
 	@state() autorunWasBlocked = false
+	@state() lastSelection = ''
+	@state() previousInteractionId?: string
 }
 
 export const stateless = new StatelessController()

@@ -16,6 +16,8 @@ export class AppStore extends ReactiveController {
 	@state() systemInstruction = ''
 
 	@state() lastSuggestions: string[] = []
+	@state() globalAsk = ''
+	@state() globalSuggestion = ''
 
 	F = new FormBuilder(this)
 
