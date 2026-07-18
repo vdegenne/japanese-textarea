@@ -1,0 +1,133 @@
+import type {MdDialog} from '@material/web/all.js'
+import '@material/web/iconbutton/icon-button.js'
+import '@material/web/select/filled-select.js'
+import '@material/web/select/select-option.js'
+import '@material/web/textfield/filled-text-field.js'
+import {withController} from '@snar/lit'
+import {customElement} from 'custom-element-decorator'
+import {html, LitElement} from 'lit'
+import {withStyles} from 'lit-with-styles'
+import {query, state} from 'lit/decorators.js'
+import toast from 'toastit'
+import '../card-element.js'
+import {geminiModels} from '../gemini.js'
+import '../material/dialog-patch.js'
+import '../material/item-patch.js'
+import {store} from '../store.js'
+import {renderThemeElements} from '../styles/theme-elements.js'
+import {themeStore} from '../styles/themeStore.js'
+import {copyToClipboard} from '../utils.js'
+import styles from './settings-dialog.css?inline'
+// import '@material/web/textfield/outlined-text-field.js';
+
+@customElement({name: 'settings-dialog', inject: true})
+@withStyles(styles)
+@withController(themeStore)
+@withController(store)
+export class SettingsDialog extends LitElement {
+	@state() open = false
+
+	@state() passwordHidden = true
+
+	@query('md-dialog') dialog!: MdDialog
+
+	render() {
+		return html`
+			<md-dialog
+				?open=${this.open}
+				@closed=${() => (this.open = false)}
+				style="max-width:min(100vw - 18px, 500px);width:100%"
+			>
+				<header slot="headline" class="select-none">
+					<md-icon>settings</md-icon>
+					Settings
+				</header>
+
+				<form slot="content" method="dialog" id="form" class="">
+					<card-element headline="Gemini">
+						<md-filled-text-field
+							label="API key"
+							value="${store.geminiApiKey}"
+							type="${this.passwordHidden ? 'password' : 'text'}"
+							@input="${(event: Event) => {
+								store.geminiApiKey = (event.target as any).value
+							}}"
+						>
+							<div slot="trailing-icon">
+								<md-icon-button
+									toggle
+									form=""
+									@click="${() => {
+										this.passwordHidden = !this.passwordHidden
+									}}"
+									@change="${(event: Event) => {
+										event.stopPropagation()
+									}}"
+								>
+									<md-icon>visibility_off</md-icon>
+									<md-icon slot="selected">visibility</md-icon>
+								</md-icon-button>
+
+								<md-icon-button
+									form=""
+									@click="${() => {
+										if (store.geminiApiKey) {
+											copyToClipboard(store.geminiApiKey)
+											toast('API key copied')
+										}
+									}}"
+									@change="${(event: Event) => {
+										event.stopPropagation()
+									}}"
+								>
+									<md-icon>content_copy</md-icon>
+								</md-icon-button>
+							</div>
+						</md-filled-text-field>
+
+						${store.F.SELECT('Model', 'geminiModel', geminiModels, {menuPositioning: 'popover', disabled: !store.geminiApiKey})}
+						${store.F.TEXTAREA('Instructions', 'systemInstruction', {supportingText: 'You can change the language used for the responses here, and/or add other instructions.', rows: 4, disabled: !store.geminiApiKey})}
+					</card-element>
+
+					<card-element headline="theme">
+						${renderThemeElements()}
+					</card-element>
+				</form>
+
+				<div slot="actions">
+					<md-text-button form="form" autofocus>Close</md-text-button>
+				</div>
+			</md-dialog>
+		`
+	}
+
+	async show() {
+		if (this.dialog.open) {
+			const dialogClose = new Promise((resolve) => {
+				const resolveCB = () => {
+					resolve(null)
+					this.dialog.removeEventListener('closed', resolveCB)
+				}
+				this.dialog.addEventListener('closed', resolveCB)
+			})
+			this.dialog.close()
+			await dialogClose
+		}
+		this.open = true
+	}
+
+	close(returnValue?: string) {
+		return this.dialog.close(returnValue)
+	}
+}
+
+declare global {
+	interface Window {
+		settingsDialog: SettingsDialog
+	}
+	interface HTMLElementTagNameMap {
+		'settings-dialog': SettingsDialog
+	}
+}
+
+export const settingsDialog = (window.settingsDialog = new SettingsDialog())
